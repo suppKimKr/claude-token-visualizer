@@ -1,15 +1,6 @@
 {
     "permissions": {
-        "allow": [
-            "Read",
-            "Write",
-            "Edit",
-            "Bash",
-            "Glob",
-            "Grep",
-            "WebFetch",
-            "WebSearch"
-        ]
+        "allow": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch", "WebSearch"]
     },
     "hooks": {
         "PreToolUse": [

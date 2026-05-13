@@ -259,7 +259,9 @@ async function main(): Promise<void> {
         }
         if (usage.seven_day_opus) {
             const remain = 100 - usage.seven_day_opus.utilization;
-            console.log(`    └ ${'7d Opus'.padEnd(10)} ${remain.toFixed(1).padStart(5)}% remaining`);
+            console.log(
+                `    └ ${'7d Opus'.padEnd(10)} ${remain.toFixed(1).padStart(5)}% remaining`,
+            );
         }
         if (usage.seven_day_sonnet) {
             const remain = 100 - usage.seven_day_sonnet.utilization;
