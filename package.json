@@ -1,0 +1,14 @@
+{
+    "name": "claude-token-visualizer",
+    "version": "0.0.1",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "m1": "tsx m1/usage-probe.ts"
+    },
+    "devDependencies": {
+        "@types/node": "^22.10.0",
+        "tsx": "^4.19.2",
+        "typescript": "^5.7.0"
+    }
+}
