@@ -7,8 +7,14 @@ claude-token-visualizer 프로젝트의 변경분을 4단계 검증 후 배포�
 ## 진행 순서
 
 ### 0. 변경분 확인
-- `git status --porcelain` 으로 변경 파일 목록 수집
-- 변경분이 없으면 "배포할 변경분 없음" 보고하고 종료
+- 이 프로젝트는 `dev`에서 작업하고 `main`에 머지하는 흐름. /ship 은 **현재 브랜치에서 base 대비 ahead 된 커밋의 변경 파일**을 검증 대상으로 본다 (working tree 가 아님).
+- 우선 working tree 가 깨끗한지 확인 (`git status --porcelain` 이 비어야 함). 비어있지 않으면 "커밋되지 않은 변경분 있음. /ship 전에 커밋 또는 stash 필요" 보고하고 종료.
+- base 결정 순서:
+  1. 현재 브랜치에 upstream(`@{u}`) 있으면 그것
+  2. 없고 현재 브랜치가 `main` 아니면 로컬 `main`
+  3. 둘 다 아니면 (예: 첫 push 의 `main` 자체) HEAD 의 모든 파일을 대상으로 본다
+- 변경 파일 목록: `git diff <base>...HEAD --name-only` (또는 fallback 시 `git ls-tree -r HEAD --name-only`)
+- 변경분이 없으면 "배포할 변경분 없음 (base=<base>, branch=<current>)" 보고하고 종료
 
 ### 1. simplify (sub-agent 위임)
 - `claude` (general-purpose) sub-agent 1개에 변경된 파일 목록 전달
@@ -30,7 +36,7 @@ claude-token-visualizer 프로젝트의 변경분을 4단계 검증 후 배포�
 
 ### 4. code review (sub-agent 위임)
 - `ecc:typescript-reviewer` agent 사용
-- 위임 프롬프트에 변경 파일 목록 + diff 컨텍스트 전달
+- 위임 프롬프트에 변경 파일 목록 + `git diff <base>...HEAD` 컨텍스트 전달 (step 0 의 base 와 동일)
 - 위임 프롬프트 끝에 반드시 다음 문구 포함:
   > 리뷰 결과의 **마지막 줄에 정확히 `APPROVE` 또는 `BLOCK: <한 줄 사유>` 만** 출력해. 다른 어떤 텍스트도 마지막 줄에 두지 마.
 - 응답의 마지막 비공백 줄을 파싱해서 `APPROVE` 면 통과, `BLOCK:` 으로 시작하면 차단
@@ -70,8 +76,10 @@ claude-token-visualizer 프로젝트의 변경분을 4단계 검증 후 배포�
 - 현재 브랜치 확인 (`git branch --show-current`)
 - remote 가 설정되어 있는지 확인 (`git remote -v`)
 - **remote 없음**: gate.json 만 기록하고 "remote 미설정 — 로컬 verified 상태. 나중에 remote 추가 후 push 하면 hook 이 통과시킴" 안내
-- **remote 있고 main 브랜치**: `git push origin main`
-- **그 외 브랜치**: 진행 중단, 사용자 확인 요청
+- **remote 있음**: 현재 브랜치를 그대로 origin 에 push
+  - upstream 없으면 `git push -u origin <current-branch>` (첫 push)
+  - upstream 있으면 `git push`
+- `main` 브랜치로의 머지는 /ship 범위 밖 — 별도 워크플로우. /ship 은 "현재 브랜치 검증 + push" 까지만 책임.
 - push 성공 시 PostToolUse hook 이 자동으로 gate.json 삭제
 
 ### 8. 최종 보고
