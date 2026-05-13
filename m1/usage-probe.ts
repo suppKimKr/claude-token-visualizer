@@ -84,11 +84,11 @@ function readKeychainToken(): string {
 async function fetchUsage(token: string): Promise<UsageResponse> {
     const res = await fetch('https://api.anthropic.com/api/oauth/usage', {
         headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
             'anthropic-beta': 'oauth-2025-04-20',
             'anthropic-version': '2023-06-01',
             'User-Agent': `claude-cli/${CLAUDE_VER} (external, cli)`,
-            'Accept': 'application/json',
+            Accept: 'application/json',
         },
     });
     if (!res.ok) {
@@ -158,9 +158,11 @@ function lastAssistantUsage(messages: MessageLine[]): { usage: UsageBlock; model
 }
 
 function effectiveContextSize(u: UsageBlock): number {
-    return (u.input_tokens ?? 0)
-        + (u.cache_creation_input_tokens ?? 0)
-        + (u.cache_read_input_tokens ?? 0);
+    return (
+        (u.input_tokens ?? 0) +
+        (u.cache_creation_input_tokens ?? 0) +
+        (u.cache_read_input_tokens ?? 0)
+    );
 }
 
 function totalTokens(u: UsageBlock): number {
@@ -245,11 +247,15 @@ async function main(): Promise<void> {
         console.log('== Anthropic Usage API ==');
         if (usage.five_hour) {
             const remain = 100 - usage.five_hour.utilization;
-            console.log(`  5-hour:   ${remain.toFixed(1).padStart(5)}% ${bar(remain)}  resets in ${untilDuration(usage.five_hour.resets_at)}`);
+            console.log(
+                `  5-hour:   ${remain.toFixed(1).padStart(5)}% ${bar(remain)}  resets in ${untilDuration(usage.five_hour.resets_at)}`,
+            );
         }
         if (usage.seven_day) {
             const remain = 100 - usage.seven_day.utilization;
-            console.log(`  7-day:    ${remain.toFixed(1).padStart(5)}% ${bar(remain)}  resets in ${untilDuration(usage.seven_day.resets_at)}`);
+            console.log(
+                `  7-day:    ${remain.toFixed(1).padStart(5)}% ${bar(remain)}  resets in ${untilDuration(usage.seven_day.resets_at)}`,
+            );
         }
         const subBuckets: Array<[string, UsageBucket | null]> = [
             ['7d Opus', usage.seven_day_opus],
@@ -258,15 +264,17 @@ async function main(): Promise<void> {
         for (const [label, b] of subBuckets) {
             if (b) {
                 const remain = 100 - b.utilization;
-                console.log(`    └ ${label.padEnd(10)} ${remain.toFixed(1).padStart(5)}% remaining`);
+                console.log(
+                    `    └ ${label.padEnd(10)} ${remain.toFixed(1).padStart(5)}% remaining`,
+                );
             }
         }
         if (usage.extra_usage) {
             const e = usage.extra_usage;
-            const pct = e.monthly_limit > 0
-                ? 100 - (e.used_credits / e.monthly_limit) * 100
-                : 100;
-            console.log(`  Overage:  ${pct.toFixed(1).padStart(5)}% ${bar(pct)}  $${e.used_credits.toFixed(2)} / $${e.monthly_limit} ${e.currency}`);
+            const pct = e.monthly_limit > 0 ? 100 - (e.used_credits / e.monthly_limit) * 100 : 100;
+            console.log(
+                `  Overage:  ${pct.toFixed(1).padStart(5)}% ${bar(pct)}  $${e.used_credits.toFixed(2)} / $${e.monthly_limit} ${e.currency}`,
+            );
         }
         console.log();
     }
@@ -305,7 +313,9 @@ async function main(): Promise<void> {
         const remainPct = 100 - usedPct;
 
         console.log(`    model: ${last.model}   context window: ${win.toLocaleString()}`);
-        console.log(`    context:  ${remainPct.toFixed(1).padStart(5)}% ${bar(remainPct)}  ${humanTokens(ctx)} / ${humanTokens(win)} used`);
+        console.log(
+            `    context:  ${remainPct.toFixed(1).padStart(5)}% ${bar(remainPct)}  ${humanTokens(ctx)} / ${humanTokens(win)} used`,
+        );
 
         const u = last.usage;
         console.log(
@@ -321,7 +331,9 @@ async function main(): Promise<void> {
             }
         }
         if (sideMsgs > 0) {
-            console.log(`    subagents (sidechain): ${sideMsgs} msgs, ${humanTokens(sideTokens)} tokens cumulative`);
+            console.log(
+                `    subagents (sidechain): ${sideMsgs} msgs, ${humanTokens(sideTokens)} tokens cumulative`,
+            );
         }
         console.log();
     }
@@ -360,7 +372,10 @@ async function main(): Promise<void> {
                 // any *.jsonl under a `subagents/` subtree counts as subagent
                 const sub = walkJsonl(p);
                 for (const item of sub) {
-                    out.push({ path: item.path, isSubagent: item.isSubagent || /\/subagents\//.test(item.path) });
+                    out.push({
+                        path: item.path,
+                        isSubagent: item.isSubagent || /\/subagents\//.test(item.path),
+                    });
                 }
             } else if (name.endsWith('.jsonl')) {
                 out.push({ path: p, isSubagent: /\/subagents\//.test(p) });
@@ -407,7 +422,7 @@ async function main(): Promise<void> {
         }
         if (t7 === 0) continue;
         const display = cwd
-            ? projectNames[cwd] ?? cwd.split('/').filter(Boolean).pop() ?? sub
+            ? (projectNames[cwd] ?? cwd.split('/').filter(Boolean).pop() ?? sub)
             : sub;
         aggByDir[sub] = {
             display,
@@ -433,9 +448,15 @@ async function main(): Promise<void> {
     if (usage?.seven_day) {
         const allTokens7d = sorted.reduce((s, a) => s + a.tokens7d, 0);
         console.log('== Cross-check ==');
-        console.log(`  Local sum across projects (7d transacted tokens): ${humanTokens(allTokens7d)}`);
-        console.log(`  API 7-day utilization:                            ${usage.seven_day.utilization.toFixed(1)}%`);
-        console.log(`  → Local sum is gross token volume; API value is plan-weighted. They are NOT directly comparable but should move together.`);
+        console.log(
+            `  Local sum across projects (7d transacted tokens): ${humanTokens(allTokens7d)}`,
+        );
+        console.log(
+            `  API 7-day utilization:                            ${usage.seven_day.utilization.toFixed(1)}%`,
+        );
+        console.log(
+            `  → Local sum is gross token volume; API value is plan-weighted. They are NOT directly comparable but should move together.`,
+        );
     }
 }
 
