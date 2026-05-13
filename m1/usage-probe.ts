@@ -257,17 +257,15 @@ async function main(): Promise<void> {
                 `  7-day:    ${remain.toFixed(1).padStart(5)}% ${bar(remain)}  resets in ${untilDuration(usage.seven_day.resets_at)}`,
             );
         }
-        const subBuckets: Array<[string, UsageBucket | null]> = [
-            ['7d Opus', usage.seven_day_opus],
-            ['7d Sonnet', usage.seven_day_sonnet],
-        ];
-        for (const [label, b] of subBuckets) {
-            if (b) {
-                const remain = 100 - b.utilization;
-                console.log(
-                    `    └ ${label.padEnd(10)} ${remain.toFixed(1).padStart(5)}% remaining`,
-                );
-            }
+        if (usage.seven_day_opus) {
+            const remain = 100 - usage.seven_day_opus.utilization;
+            console.log(`    └ ${'7d Opus'.padEnd(10)} ${remain.toFixed(1).padStart(5)}% remaining`);
+        }
+        if (usage.seven_day_sonnet) {
+            const remain = 100 - usage.seven_day_sonnet.utilization;
+            console.log(
+                `    └ ${'7d Sonnet'.padEnd(10)} ${remain.toFixed(1).padStart(5)}% remaining`,
+            );
         }
         if (usage.extra_usage) {
             const e = usage.extra_usage;
@@ -370,13 +368,7 @@ async function main(): Promise<void> {
             }
             if (st.isDirectory()) {
                 // any *.jsonl under a `subagents/` subtree counts as subagent
-                const sub = walkJsonl(p);
-                for (const item of sub) {
-                    out.push({
-                        path: item.path,
-                        isSubagent: item.isSubagent || /\/subagents\//.test(item.path),
-                    });
-                }
+                out.push(...walkJsonl(p));
             } else if (name.endsWith('.jsonl')) {
                 out.push({ path: p, isSubagent: /\/subagents\//.test(p) });
             }
