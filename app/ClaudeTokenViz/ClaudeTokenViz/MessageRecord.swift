@@ -4,23 +4,18 @@ import Foundation
 // ~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl and may also live
 // under .../<sessionId>/subagents/agent-<id>.jsonl for sub-agent fan-out.
 //
-// The schema is partial on purpose — we only model fields the stats
+// The schema is partial on purpose -- we only model fields the stats
 // pipeline actually reads. Unknown keys are tolerated by Decodable.
+// New fields are added as later milestones need them.
 //
 // nonisolated because JSONLScanner decodes records on a detached task;
 // the project-wide default isolation is @MainActor.
 nonisolated struct MessageRecord: Decodable, Sendable {
-    let type: String?
-    let isSidechain: Bool?
-    let cwd: String?
-    let sessionId: String?
-    let timestamp: String?
-    let parentUuid: String?
+    private let timestamp: String?
     let message: InnerMessage?
 
     nonisolated struct InnerMessage: Decodable, Sendable {
         let model: String?
-        let role: String?
         let usage: TokenUsage?
     }
 

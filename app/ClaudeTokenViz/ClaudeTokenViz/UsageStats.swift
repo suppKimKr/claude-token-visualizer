@@ -26,8 +26,6 @@ final class UsageStats {
     private(set) var messagesByHourOfWeek: [Int: [Int: Int]] = [:]
 
     private(set) var isLoading: Bool = false
-    private(set) var lastScanError: String?
-    private(set) var lastScanAt: Date?
 
     init() {
         Task {
@@ -45,8 +43,6 @@ final class UsageStats {
         for item in scanned {
             ingest(item, calendar: calendar)
         }
-        lastScanAt = Date()
-        lastScanError = nil
     }
 
     private func ingest(_ item: ScannedMessage, calendar: Calendar) {

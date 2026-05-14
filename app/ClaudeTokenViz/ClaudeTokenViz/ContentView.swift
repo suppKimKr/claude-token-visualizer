@@ -123,11 +123,6 @@ struct ContentView: View {
             Text("Stats: scanning ~/.claude/projects/…")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-        } else if let err = stats.lastScanError {
-            Text("Stats: scan failed — \(err)")
-                .font(.caption2)
-                .foregroundStyle(.red)
-                .lineLimit(2)
         } else {
             Text("Stats: \(stats.totalMessages) msgs · \(stats.projectCount) projects")
                 .font(.caption2)
