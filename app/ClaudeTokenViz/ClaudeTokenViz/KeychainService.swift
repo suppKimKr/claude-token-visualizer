@@ -24,10 +24,12 @@ enum KeychainError: Error, CustomStringConvertible {
     }
 }
 
-private struct KeychainBlob: Decodable {
+// nonisolated because the decode happens on a detached task; the
+// project-wide default isolation is @MainActor.
+nonisolated private struct KeychainBlob: Decodable {
     let claudeAiOauth: ClaudeAiOauth
 
-    struct ClaudeAiOauth: Decodable {
+    nonisolated struct ClaudeAiOauth: Decodable {
         let accessToken: String
     }
 }
@@ -38,7 +40,16 @@ enum KeychainService {
     // TypeScript probe's `readKeychainToken()` exactly: shell out to the
     // `security` CLI with `-w` to print only the password, which itself
     // is a JSON blob.
-    static func readClaudeCodeToken() throws -> String {
+    //
+    // The blocking Process work runs on a detached task so a locked
+    // keychain or ACL prompt cannot stall the MainActor (popover UI).
+    static func readClaudeCodeToken() async throws -> String {
+        return try await Task.detached(priority: .userInitiated) {
+            try runSecurityFindGenericPassword()
+        }.value
+    }
+
+    nonisolated private static func runSecurityFindGenericPassword() throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
         process.arguments = [

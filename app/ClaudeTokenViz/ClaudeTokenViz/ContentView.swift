@@ -1,38 +1,37 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var loadState: LoadState = .loading
-
-    enum LoadState {
-        case loading
-        case loaded(UsageResponse)
-        case failed(String)
-    }
+    let model: UsageModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Claude Token Visualizer")
-                .font(.headline)
-            Text("M2.2 — live data")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Claude Token Visualizer")
+                    .font(.headline)
+                Spacer()
+                if model.isFetching {
+                    ProgressView().controlSize(.mini)
+                }
+                if let updated = model.lastUpdated {
+                    Text(updated, format: .relative(presentation: .numeric))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             Divider()
 
-            switch loadState {
-            case .loading:
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("Fetching usage…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            case .loaded(let usage):
-                usageRows(usage)
-            case .failed(let message):
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+            mainContent
+
+            if model.snapshot != nil, let err = model.lastError {
+                let banner =
+                    Text("⚠ failed ")
+                    + Text(model.lastErrorAt ?? Date(), format: .relative(presentation: .numeric))
+                    + Text(" — \(shortError(err))")
+                banner
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -40,9 +39,10 @@ struct ContentView: View {
 
             HStack {
                 Button("Refresh") {
-                    Task { await fetch() }
+                    Task { await model.refresh() }
                 }
                 .buttonStyle(.borderless)
+                .disabled(model.isFetching)
                 Spacer()
                 Button("Quit") {
                     NSApplication.shared.terminate(nil)
@@ -52,8 +52,28 @@ struct ContentView: View {
         }
         .padding(16)
         .frame(width: 280)
-        .task {
-            await fetch()
+    }
+
+    @ViewBuilder
+    private var mainContent: some View {
+        if let snapshot = model.snapshot {
+            usageRows(snapshot)
+        } else if model.isFetching {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Fetching usage…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } else if let err = model.lastError {
+            Text(err)
+                .font(.caption)
+                .foregroundStyle(.red)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            Text("No data yet")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -94,18 +114,9 @@ struct ContentView: View {
         String(format: "%5.1f%% remaining", max(0, 100 - utilization))
     }
 
-    private func fetch() async {
-        loadState = .loading
-        do {
-            let token = try KeychainService.readClaudeCodeToken()
-            let usage = try await UsageAPI.fetchUsage(token: token)
-            loadState = .loaded(usage)
-        } catch {
-            loadState = .failed(String(describing: error))
-        }
+    private func shortError(_ raw: String) -> String {
+        let collapsed = raw.replacingOccurrences(of: "\n", with: " ")
+        if collapsed.count <= 80 { return collapsed }
+        return String(collapsed.prefix(77)) + "..."
     }
-}
-
-#Preview {
-    ContentView()
 }

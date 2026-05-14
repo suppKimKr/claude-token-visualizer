@@ -2,13 +2,15 @@ import SwiftUI
 
 @main
 struct ClaudeTokenVizApp: App {
+    @State private var model = UsageModel()
+
     var body: some Scene {
         MenuBarExtra {
-            ContentView()
+            ContentView(model: model)
         } label: {
             HStack(spacing: 3) {
                 Image(systemName: "gauge.medium")
-                Text("--%")
+                Text(model.headlineLabel)
             }
         }
         .menuBarExtraStyle(.window)
