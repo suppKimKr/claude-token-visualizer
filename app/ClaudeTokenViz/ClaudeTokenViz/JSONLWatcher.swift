@@ -70,7 +70,13 @@ nonisolated final class JSONLWatcher: @unchecked Sendable {
         else { return }
 
         let projectDir = JSONLScanner.projectDirName(for: url)
-        let parsed = JSONLScanner.parseChunk(chunk, projectDir: projectDir, decoder: decoder)
+        let isSubagent = JSONLScanner.isSubagentFile(url)
+        let parsed = JSONLScanner.parseChunk(
+            chunk,
+            projectDir: projectDir,
+            isSubagent: isSubagent,
+            decoder: decoder,
+        )
         offsets[url] = prev + UInt64(parsed.consumedBytes)
         guard !parsed.messages.isEmpty else { return }
 

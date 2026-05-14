@@ -19,6 +19,19 @@ final class UsageStats {
 
     private(set) var modelCounts: [String: Int] = [:]
 
+    // Tool-use blocks counted by their `name` (Bash, Read, Edit, …).
+    private(set) var toolCounts: [String: Int] = [:]
+
+    // Most-recent user prompts, sorted newest first, capped at `recentPromptCap`.
+    private(set) var recentPrompts: [RecentPrompt] = []
+    private let recentPromptCap = 50
+
+    nonisolated struct RecentPrompt: Sendable, Hashable {
+        let date: Date
+        let projectDir: String
+        let snippet: String
+    }
+
     // Day key = Calendar's start-of-day in the user's current timezone.
     private(set) var messagesByDay: [Date: Int] = [:]
 
@@ -75,6 +88,7 @@ final class UsageStats {
     // `-`) and returns the hidden dir name without the leading dot.
     private nonisolated static func firstHiddenDirName(in encoded: String) -> String? {
         let parts = encoded.split(separator: "-", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count > 1 else { return nil }
         for i in 1..<(parts.count - 1) where parts[i].isEmpty && !parts[i + 1].isEmpty {
             return parts[i + 1]
         }
@@ -124,6 +138,7 @@ final class UsageStats {
         for item in result.messages {
             ingest(item, calendar: calendar)
         }
+        trimRecentPrompts()
 
         let w = JSONLWatcher { [weak self] messages in
             self?.ingestAppended(messages)
@@ -136,6 +151,14 @@ final class UsageStats {
         let calendar = Calendar.current
         for item in messages {
             ingest(item, calendar: calendar)
+        }
+        trimRecentPrompts()
+    }
+
+    private func trimRecentPrompts() {
+        recentPrompts.sort { $0.date > $1.date }
+        if recentPrompts.count > recentPromptCap {
+            recentPrompts = Array(recentPrompts.prefix(recentPromptCap))
         }
     }
 
@@ -152,6 +175,30 @@ final class UsageStats {
 
         if let model = item.record.message?.model {
             modelCounts[model, default: 0] += 1
+        }
+
+        if let blocks = item.record.message?.content {
+            for block in blocks where block.type == "tool_use" {
+                if let name = block.name {
+                    toolCounts[name, default: 0] += 1
+                }
+            }
+        }
+
+        if !item.isSubagent,
+            let date = item.record.timestampDate,
+            let raw = item.record.message?.userPromptText
+        {
+            let snippet =
+                raw
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !snippet.isEmpty {
+                let capped = snippet.count > 200 ? String(snippet.prefix(200)) + "…" : snippet
+                recentPrompts.append(
+                    RecentPrompt(date: date, projectDir: item.projectDir, snippet: capped),
+                )
+            }
         }
 
         if let date = item.record.timestampDate {
@@ -181,6 +228,17 @@ final class UsageStats {
         var out = head.map { (label: $0.key, tokens: $0.value) }
         if othersTotal > 0 {
             out.append((label: "Others", tokens: othersTotal))
+        }
+        return out
+    }
+
+    func toolUsageSlices(topN n: Int) -> [(label: String, count: Int)] {
+        let sorted = toolCounts.sorted { $0.value > $1.value }
+        let head = Array(sorted.prefix(n))
+        let othersTotal = sorted.dropFirst(n).reduce(0) { $0 + $1.value }
+        var out = head.map { (label: $0.key, count: $0.value) }
+        if othersTotal > 0 {
+            out.append((label: "Others", count: othersTotal))
         }
         return out
     }

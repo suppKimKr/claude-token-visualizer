@@ -26,6 +26,15 @@ struct StatsView: View {
                         }
                     }
 
+                    section("Tools") {
+                        if toolSlices.isEmpty {
+                            empty("No tool usage yet.")
+                        } else {
+                            toolsChart
+                                .frame(height: CGFloat(max(180, toolSlices.count * 28)))
+                        }
+                    }
+
                     section("Daily Activity") {
                         if dailySeries.isEmpty {
                             empty("No timestamped messages yet.")
@@ -41,6 +50,14 @@ struct StatsView: View {
                         } else {
                             rhythmChart
                                 .frame(height: 220)
+                        }
+                    }
+
+                    section("Recent Prompts") {
+                        if stats.recentPrompts.isEmpty {
+                            empty("No user prompts yet.")
+                        } else {
+                            recentPromptsList
                         }
                     }
                 }
@@ -119,6 +136,47 @@ struct StatsView: View {
             }
         }
         .chartLegend(position: .trailing, alignment: .top, spacing: 12)
+    }
+
+    // MARK: - Tools
+
+    private struct ToolSlice: Hashable {
+        let label: String
+        let count: Int
+    }
+
+    // Same 8 + Others cap as Projects so the legend stays comparable.
+    private var toolSlices: [ToolSlice] {
+        stats.toolUsageSlices(topN: 8).map {
+            ToolSlice(label: $0.label, count: $0.count)
+        }
+    }
+
+    private var toolsChart: some View {
+        let slices = toolSlices
+        let orderedLabels = slices.map(\.label)
+        return Chart(slices, id: \.self) { slice in
+            BarMark(
+                x: .value("Count", slice.count),
+                y: .value("Tool", slice.label),
+            )
+            .cornerRadius(3)
+            .foregroundStyle(Color.accentColor.gradient)
+            .annotation(position: .trailing, alignment: .leading, spacing: 6) {
+                Text(slice.count.formatted())
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        // Pin Y to the pre-sorted (descending) order so Charts doesn't
+        // re-alphabetise the categorical axis.
+        .chartYScale(domain: orderedLabels)
+        .chartXAxis(.hidden)
+        .chartYAxis {
+            AxisMarks(position: .leading) { _ in
+                AxisValueLabel()
+            }
+        }
     }
 
     // MARK: - Timeline
@@ -246,6 +304,34 @@ struct StatsView: View {
                 {
                     AxisValueLabel(StatsView.weekdayLabels[idx - 1])
                 }
+            }
+        }
+    }
+
+    // MARK: - Recent Prompts
+
+    // Cap the visible feed at 20 even though UsageStats keeps up to 50 — any
+    // more rows and the section dominates the window.
+    private var recentPromptsList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(stats.recentPrompts.prefix(20), id: \.self) { prompt in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(stats.prettyName(prompt.projectDir))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(prompt.date, format: .relative(presentation: .numeric))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    Text(prompt.snippet)
+                        .font(.callout)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+                .padding(.vertical, 8)
+                Divider()
             }
         }
     }

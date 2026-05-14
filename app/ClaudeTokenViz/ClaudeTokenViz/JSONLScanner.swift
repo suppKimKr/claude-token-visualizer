@@ -10,6 +10,10 @@ import Foundation
 nonisolated struct ScannedMessage: Sendable {
     let record: MessageRecord
     let projectDir: String
+    // True when the file lives under `.../<sessionId>/subagents/agent-*.jsonl`.
+    // The Recent Prompts feed uses this to skip system-injected subagent
+    // kickoffs that aren't really "things the human typed".
+    let isSubagent: Bool
 }
 
 // JSONL parsing and walking primitives shared by the one-shot initial scan
@@ -37,8 +41,14 @@ nonisolated enum JSONLScanner {
         var offsets: [URL: UInt64] = [:]
         for fileURL in jsonlFiles(under: projectsDir) {
             let projectDir = projectDirName(for: fileURL)
+            let isSubagent = isSubagentFile(fileURL)
             guard let data = try? Data(contentsOf: fileURL) else { continue }
-            let parsed = parseChunk(data, projectDir: projectDir, decoder: decoder)
+            let parsed = parseChunk(
+                data,
+                projectDir: projectDir,
+                isSubagent: isSubagent,
+                decoder: decoder,
+            )
             out.append(contentsOf: parsed.messages)
             offsets[fileURL] = UInt64(parsed.consumedBytes)
         }
@@ -52,6 +62,7 @@ nonisolated enum JSONLScanner {
     static func parseChunk(
         _ data: Data,
         projectDir: String,
+        isSubagent: Bool,
         decoder: JSONDecoder,
     ) -> (messages: [ScannedMessage], consumedBytes: Int) {
         guard let lastNewline = data.lastIndex(of: 0x0A) else {
@@ -67,12 +78,23 @@ nonisolated enum JSONLScanner {
             if nl > cursor {
                 let line = data[cursor..<nl]
                 if let record = try? decoder.decode(MessageRecord.self, from: line) {
-                    messages.append(ScannedMessage(record: record, projectDir: projectDir))
+                    messages.append(
+                        ScannedMessage(
+                            record: record,
+                            projectDir: projectDir,
+                            isSubagent: isSubagent,
+                        ),
+                    )
                 }
             }
             cursor = nl < endExclusive ? data.index(after: nl) : endExclusive
         }
         return (messages, consumedBytes)
+    }
+
+    // Subagent fan-out files live at .../<sessionId>/subagents/agent-*.jsonl.
+    static func isSubagentFile(_ file: URL) -> Bool {
+        file.standardizedFileURL.pathComponents.contains("subagents")
     }
 
     static func makeDecoder() -> JSONDecoder {
