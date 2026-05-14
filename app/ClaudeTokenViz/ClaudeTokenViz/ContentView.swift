@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     let model: UsageModel
+    let stats: UsageStats
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -36,6 +37,8 @@ struct ContentView: View {
             }
 
             Divider()
+
+            statsDebugLine
 
             HStack {
                 Button("Refresh") {
@@ -112,6 +115,24 @@ struct ContentView: View {
 
     private func remainingString(_ utilization: Double) -> String {
         String(format: "%5.1f%% remaining", max(0, 100 - utilization))
+    }
+
+    @ViewBuilder
+    private var statsDebugLine: some View {
+        if stats.isLoading {
+            Text("Stats: scanning ~/.claude/projects/…")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        } else if let err = stats.lastScanError {
+            Text("Stats: scan failed — \(err)")
+                .font(.caption2)
+                .foregroundStyle(.red)
+                .lineLimit(2)
+        } else {
+            Text("Stats: \(stats.totalMessages) msgs · \(stats.projectCount) projects")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private func shortError(_ raw: String) -> String {

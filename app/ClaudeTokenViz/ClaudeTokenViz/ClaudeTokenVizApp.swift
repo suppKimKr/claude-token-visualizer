@@ -3,10 +3,11 @@ import SwiftUI
 @main
 struct ClaudeTokenVizApp: App {
     @State private var model = UsageModel()
+    @State private var stats = UsageStats()
 
     var body: some Scene {
         MenuBarExtra {
-            ContentView(model: model)
+            ContentView(model: model, stats: stats)
         } label: {
             HStack(spacing: 3) {
                 Image(systemName: "gauge.medium")
