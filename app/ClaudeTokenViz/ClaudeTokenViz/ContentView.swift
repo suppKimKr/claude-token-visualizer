@@ -4,6 +4,8 @@ struct ContentView: View {
     let model: UsageModel
     let stats: UsageStats
 
+    @Environment(\.openWindow) private var openWindow
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
@@ -46,6 +48,11 @@ struct ContentView: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(model.isFetching)
+                Button("Stats…") {
+                    openWindow(id: "stats")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+                .buttonStyle(.borderless)
                 Spacer()
                 Button("Quit") {
                     NSApplication.shared.terminate(nil)

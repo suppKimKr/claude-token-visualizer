@@ -15,5 +15,10 @@ struct ClaudeTokenVizApp: App {
             }
         }
         .menuBarExtraStyle(.window)
+
+        Window("Stats", id: "stats") {
+            StatsView(stats: stats)
+        }
+        .defaultSize(width: 820, height: 520)
     }
 }
