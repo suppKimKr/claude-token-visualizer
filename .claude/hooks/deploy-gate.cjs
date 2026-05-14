@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isGitPush, findProjectRoot } = require('./gate-utils.cjs');
 
 let raw = '';
 process.stdin.on('data', (chunk) => {
@@ -67,34 +68,3 @@ process.stdin.on('end', () => {
     process.stderr.write('\n');
     process.exit(2);
 });
-
-function isGitPush(cmd) {
-    const stripped = stripQuotedAndHeredocs(cmd);
-    const re = /(^|[\s;&|(`])git(\s+(-C\s+\S+|--[\w-]+(=\S*)?|-[A-Za-z]+))*\s+push\b/;
-    if (!re.test(stripped)) return false;
-    if (/--dry-run\b/.test(stripped)) return false;
-    return true;
-}
-
-function stripQuotedAndHeredocs(cmd) {
-    let s = cmd;
-    s = s.replace(/<<-?\s*'?"?(\w+)"?'?[\s\S]*?\n\1\b/g, '');
-    s = s.replace(/"(?:[^"\\]|\\.)*"/g, '""');
-    s = s.replace(/'[^']*'/g, "''");
-    return s;
-}
-
-// Walk up from cwd until we find a dir containing .claude/hooks/deploy-gate.cjs
-// (i.e. this same file). That dir is the project root.
-function findProjectRoot(cwd) {
-    if (!cwd) return null;
-    let dir = cwd;
-    const root = path.parse(dir).root;
-    while (true) {
-        if (fs.existsSync(path.join(dir, '.claude', 'hooks', 'deploy-gate.cjs'))) return dir;
-        if (dir === root) return null;
-        const parent = path.dirname(dir);
-        if (parent === dir) return null;
-        dir = parent;
-    }
-}

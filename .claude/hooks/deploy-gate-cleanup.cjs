@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isGitPush, findProjectRoot } = require('./gate-utils.cjs');
 
 let raw = '';
 process.stdin.on('data', (chunk) => {
@@ -21,7 +22,7 @@ process.stdin.on('end', () => {
     const cmd = (payload.tool_input && payload.tool_input.command) || '';
     const cwd = payload.cwd || '';
 
-    if (!/\bgit\s+push\b/.test(cmd) || /--dry-run\b/.test(cmd)) process.exit(0);
+    if (!isGitPush(cmd)) process.exit(0);
 
     const projectRoot = findProjectRoot(cwd);
     if (!projectRoot) process.exit(0);
@@ -35,16 +36,3 @@ process.stdin.on('end', () => {
     }
     process.exit(0);
 });
-
-function findProjectRoot(cwd) {
-    if (!cwd) return null;
-    let dir = cwd;
-    const root = path.parse(dir).root;
-    while (true) {
-        if (fs.existsSync(path.join(dir, '.claude', 'hooks', 'deploy-gate.cjs'))) return dir;
-        if (dir === root) return null;
-        const parent = path.dirname(dir);
-        if (parent === dir) return null;
-        dir = parent;
-    }
-}
