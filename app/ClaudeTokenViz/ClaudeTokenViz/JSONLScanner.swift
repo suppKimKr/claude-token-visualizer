@@ -12,40 +12,78 @@ nonisolated struct ScannedMessage: Sendable {
     let projectDir: String
 }
 
-// Walks ~/.claude/projects/ recursively, parses every *.jsonl line into
-// a ScannedMessage, and returns the lot. Designed to be called from a
-// detached task — none of this work touches the main actor.
+// JSONL parsing and walking primitives shared by the one-shot initial scan
+// and the live JSONLWatcher tail. Everything here is `nonisolated` so the
+// scan can run from a detached task.
 nonisolated enum JSONLScanner {
     static let projectsDir: URL = FileManager.default
         .homeDirectoryForCurrentUser
         .appendingPathComponent(".claude/projects")
 
-    static func scanAll() -> [ScannedMessage] {
-        guard FileManager.default.fileExists(atPath: projectsDir.path) else {
-            return []
-        }
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+    struct ScanResult: Sendable {
+        let messages: [ScannedMessage]
+        // File byte-offset *just past the last successfully parsed line* for
+        // each scanned file. JSONLWatcher resumes from these so an in-flight
+        // partial line at scan time is re-read once it finishes writing.
+        let offsets: [URL: UInt64]
+    }
 
+    static func scanAll() -> ScanResult {
+        guard FileManager.default.fileExists(atPath: projectsDir.path) else {
+            return ScanResult(messages: [], offsets: [:])
+        }
+        let decoder = makeDecoder()
         var out: [ScannedMessage] = []
+        var offsets: [URL: UInt64] = [:]
         for fileURL in jsonlFiles(under: projectsDir) {
             let projectDir = projectDirName(for: fileURL)
-            guard let raw = try? String(contentsOf: fileURL, encoding: .utf8) else {
-                continue
-            }
-            for line in raw.split(separator: "\n", omittingEmptySubsequences: true) {
-                guard let data = line.data(using: .utf8) else { continue }
-                if let record = try? decoder.decode(MessageRecord.self, from: data) {
-                    out.append(ScannedMessage(record: record, projectDir: projectDir))
+            guard let data = try? Data(contentsOf: fileURL) else { continue }
+            let parsed = parseChunk(data, projectDir: projectDir, decoder: decoder)
+            out.append(contentsOf: parsed.messages)
+            offsets[fileURL] = UInt64(parsed.consumedBytes)
+        }
+        return ScanResult(messages: out, offsets: offsets)
+    }
+
+    // Parse a chunk of bytes (always at a line boundary on the *left*) and
+    // return everything up to the last '\n' inside it. The trailing partial
+    // line — if any — is intentionally left unread so the next call can pick
+    // it up after the writer flushes the closing '\n'.
+    static func parseChunk(
+        _ data: Data,
+        projectDir: String,
+        decoder: JSONDecoder,
+    ) -> (messages: [ScannedMessage], consumedBytes: Int) {
+        guard let lastNewline = data.lastIndex(of: 0x0A) else {
+            return ([], 0)
+        }
+        let endExclusive = data.index(after: lastNewline)
+        let consumedBytes = endExclusive - data.startIndex
+
+        var messages: [ScannedMessage] = []
+        var cursor = data.startIndex
+        while cursor < endExclusive {
+            let nl = data[cursor..<endExclusive].firstIndex(of: 0x0A) ?? endExclusive
+            if nl > cursor {
+                let line = data[cursor..<nl]
+                if let record = try? decoder.decode(MessageRecord.self, from: line) {
+                    messages.append(ScannedMessage(record: record, projectDir: projectDir))
                 }
             }
+            cursor = nl < endExclusive ? data.index(after: nl) : endExclusive
         }
-        return out
+        return (messages, consumedBytes)
+    }
+
+    static func makeDecoder() -> JSONDecoder {
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        return d
     }
 
     // Returns the first path component under ~/.claude/projects/ for the
     // given file -- i.e., the on-disk project key Claude Code uses.
-    private static func projectDirName(for file: URL) -> String {
+    static func projectDirName(for file: URL) -> String {
         let rootCount = projectsDir.standardizedFileURL.pathComponents.count
         let fileComponents = file.standardizedFileURL.pathComponents
         guard fileComponents.count > rootCount else { return "" }

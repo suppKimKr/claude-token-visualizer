@@ -2,9 +2,9 @@ import Foundation
 import Observation
 
 // Aggregated view over every JSONL message under ~/.claude/projects/.
-// M3.1 scope: one-shot initial scan on launch, no file watching yet.
-// Future milestones (M3.x) will layer FSEvents on top to keep the
-// aggregations live as Claude Code appends new lines.
+// On launch a one-shot scan ingests every existing line; afterwards an
+// FSEvents-backed JSONLWatcher tails the same files and feeds appends
+// straight back into `ingest`.
 @MainActor
 @Observable
 final class UsageStats {
@@ -27,9 +27,8 @@ final class UsageStats {
 
     private(set) var isLoading: Bool = false
 
-    // encoded ~/.claude/projects/ key -> human-readable name, loaded once
-    // from ~/.claude/homunculus/projects.json at init.
     private let projectNames: [String: String]
+    private var watcher: JSONLWatcher?
 
     init() {
         self.projectNames = UsageStats.loadProjectNames()
@@ -118,11 +117,24 @@ final class UsageStats {
     func initialScan() async {
         isLoading = true
         defer { isLoading = false }
-        let scanned = await Task.detached(priority: .userInitiated) {
+        let result = await Task.detached(priority: .userInitiated) {
             JSONLScanner.scanAll()
         }.value
         let calendar = Calendar.current
-        for item in scanned {
+        for item in result.messages {
+            ingest(item, calendar: calendar)
+        }
+
+        let w = JSONLWatcher { [weak self] messages in
+            self?.ingestAppended(messages)
+        }
+        w.start(root: JSONLScanner.projectsDir, initialOffsets: result.offsets)
+        watcher = w
+    }
+
+    func ingestAppended(_ messages: [ScannedMessage]) {
+        let calendar = Calendar.current
+        for item in messages {
             ingest(item, calendar: calendar)
         }
     }
