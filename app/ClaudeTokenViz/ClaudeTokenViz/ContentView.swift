@@ -1,10 +1,9 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var loadState: LoadState = .idle
+    @State private var loadState: LoadState = .loading
 
     enum LoadState {
-        case idle
         case loading
         case loaded(UsageResponse)
         case failed(String)
@@ -21,7 +20,7 @@ struct ContentView: View {
             Divider()
 
             switch loadState {
-            case .idle, .loading:
+            case .loading:
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
                     Text("Fetching usage…")
