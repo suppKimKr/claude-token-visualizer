@@ -36,7 +36,7 @@ struct StatsView: View {
                     }
 
                     section("Rhythm") {
-                        if rhythmCells.allSatisfy({ $0.count == 0 }) {
+                        if stats.messagesByHourOfWeek.isEmpty {
                             empty("No weekday/hour data yet.")
                         } else {
                             rhythmChart
@@ -79,6 +79,46 @@ struct StatsView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, minHeight: 80)
+    }
+
+    // MARK: - Projects
+
+    private struct ProjectSlice: Hashable {
+        let label: String
+        let tokens: Int
+    }
+
+    // Top 8 projects by token total + an "Others" bucket. Anything beyond
+    // 8 slices makes the donut illegible. Aggregation by pretty-name is
+    // done in UsageStats so paperclip-style multi-workspace projects roll
+    // up to one slice.
+    private var projectSlices: [ProjectSlice] {
+        stats.projectTokenSlices(topN: 8).map {
+            ProjectSlice(label: $0.label, tokens: $0.tokens)
+        }
+    }
+
+    private var projectsDonut: some View {
+        let slices = projectSlices
+        let totalTokens = slices.reduce(0) { $0 + $1.tokens }
+        return Chart(slices, id: \.self) { slice in
+            SectorMark(
+                angle: .value("Tokens", slice.tokens),
+                innerRadius: .ratio(0.6),
+                angularInset: 2,
+            )
+            .cornerRadius(2)
+            .foregroundStyle(by: .value("Project", slice.label))
+            .annotation(position: .overlay, alignment: .center) {
+                let share = totalTokens > 0 ? Double(slice.tokens) / Double(totalTokens) : 0
+                if share >= 0.06 {
+                    Text(String(format: "%.0f%%", share * 100))
+                        .font(.caption2)
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .chartLegend(position: .trailing, alignment: .top, spacing: 12)
     }
 
     // MARK: - Timeline
@@ -170,48 +210,6 @@ struct StatsView: View {
         }
         return out
     }
-
-    // MARK: - Projects
-
-    private struct ProjectSlice: Hashable {
-        let label: String
-        let tokens: Int
-    }
-
-    // Top 8 projects by token total + an "Others" bucket. Anything beyond
-    // 8 slices makes the donut illegible. Aggregation by pretty-name is
-    // done in UsageStats so paperclip-style multi-workspace projects roll
-    // up to one slice.
-    private var projectSlices: [ProjectSlice] {
-        stats.projectTokenSlices(topN: 8).map {
-            ProjectSlice(label: $0.label, tokens: $0.tokens)
-        }
-    }
-
-    private var projectsDonut: some View {
-        let slices = projectSlices
-        let totalTokens = slices.reduce(0) { $0 + $1.tokens }
-        return Chart(slices, id: \.self) { slice in
-            SectorMark(
-                angle: .value("Tokens", slice.tokens),
-                innerRadius: .ratio(0.6),
-                angularInset: 2,
-            )
-            .cornerRadius(2)
-            .foregroundStyle(by: .value("Project", slice.label))
-            .annotation(position: .overlay, alignment: .center) {
-                let share = totalTokens > 0 ? Double(slice.tokens) / Double(totalTokens) : 0
-                if share >= 0.06 {
-                    Text(String(format: "%.0f%%", share * 100))
-                        .font(.caption2)
-                        .foregroundStyle(.white)
-                }
-            }
-        }
-        .chartLegend(position: .trailing, alignment: .top, spacing: 12)
-    }
-
-    // MARK: - Rhythm
 
     private var rhythmChart: some View {
         let cells = rhythmCells

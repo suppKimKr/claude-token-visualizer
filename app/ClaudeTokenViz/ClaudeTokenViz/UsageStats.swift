@@ -52,7 +52,6 @@ final class UsageStats {
     //      UUID workspaces under one root.
     //   4. Trailing hyphen-segment -> last-ditch fallback.
     func prettyName(_ projectDir: String) -> String {
-        if projectDir == "Others" { return projectDir }
         if let name = projectNames[projectDir] { return name }
 
         var bestKey: String?
