@@ -23,10 +23,10 @@ struct ContentView: View {
 
             mainContent
 
-            if model.snapshot != nil, let err = model.lastError {
+            if model.snapshot != nil, let err = model.lastError, let errAt = model.lastErrorAt {
                 let banner =
                     Text("⚠ failed ")
-                    + Text(model.lastErrorAt ?? Date(), format: .relative(presentation: .numeric))
+                    + Text(errAt, format: .relative(presentation: .numeric))
                     + Text(" — \(shortError(err))")
                 banner
                     .font(.caption2)

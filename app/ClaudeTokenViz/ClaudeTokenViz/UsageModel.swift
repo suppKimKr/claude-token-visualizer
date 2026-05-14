@@ -62,11 +62,6 @@ final class UsageModel {
         return min(base * factor, cap)
     }
 
-    func stop() {
-        pollTask?.cancel()
-        pollTask = nil
-    }
-
     func refresh() async {
         // Optimistic clear so the user sees the banner disappear the moment
         // they click. If the new fetch also fails, it will reappear with a
