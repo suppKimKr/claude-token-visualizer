@@ -8,3 +8,10 @@ build/
 .tsbuildinfo
 .claude/settings.local.json
 .claude/state/
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+DerivedData/
