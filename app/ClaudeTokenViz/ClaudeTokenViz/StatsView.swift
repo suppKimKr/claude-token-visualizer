@@ -35,19 +35,14 @@ struct StatsView: View {
         .frame(minWidth: 720, minHeight: 460)
     }
 
-    // Sorted (date, count) pairs across every observed day.
     private var dailySeries: [(date: Date, count: Int)] {
         stats.messagesByDay
             .map { (date: $0.key, count: $0.value) }
             .sorted { $0.date < $1.date }
     }
 
-    // Top 3 days by message count -- used to annotate peaks on the chart.
     private var peakDays: [(date: Date, count: Int)] {
-        dailySeries
-            .sorted { $0.count > $1.count }
-            .prefix(3)
-            .map { $0 }
+        Array(dailySeries.sorted { $0.count > $1.count }.prefix(3))
     }
 
     private var timelineChart: some View {
@@ -88,7 +83,7 @@ struct StatsView: View {
             }
         }
         .chartXAxis {
-            AxisMarks(values: .stride(by: .month)) { value in
+            AxisMarks(values: .stride(by: .month)) { _ in
                 AxisGridLine()
                 AxisTick()
                 AxisValueLabel(format: .dateTime.month(.abbreviated))
