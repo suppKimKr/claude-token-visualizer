@@ -27,10 +27,93 @@ final class UsageStats {
 
     private(set) var isLoading: Bool = false
 
+    // encoded ~/.claude/projects/ key -> human-readable name, loaded once
+    // from ~/.claude/homunculus/projects.json at init.
+    private let projectNames: [String: String]
+
     init() {
+        self.projectNames = UsageStats.loadProjectNames()
         Task {
             await initialScan()
         }
+    }
+
+    // Resolves a Claude Code project dir key to a readable name.
+    //
+    //   1. Exact match in homunculus -> use the name.
+    //   2. Longest homunculus key that is a path-segment prefix of the
+    //      project dir -> use that parent's name. Catches sub-directory
+    //      sessions of a registered project (e.g. .claude/state inside
+    //      a known repo).
+    //   3. Decode heuristic: the encoder maps both '/' and '.' to '-',
+    //      so a `--` boundary in the key implies the next segment was
+    //      a hidden dir (e.g. paperclip from /Users/<u>/.paperclip/...).
+    //      Use that segment -- works well for tool dirs that group many
+    //      UUID workspaces under one root.
+    //   4. Trailing hyphen-segment -> last-ditch fallback.
+    func prettyName(_ projectDir: String) -> String {
+        if projectDir == "Others" { return projectDir }
+        if let name = projectNames[projectDir] { return name }
+
+        var bestKey: String?
+        for key in projectNames.keys where projectDir.hasPrefix(key + "-") {
+            if bestKey == nil || key.count > bestKey!.count {
+                bestKey = key
+            }
+        }
+        if let bestKey, let name = projectNames[bestKey] {
+            return name
+        }
+
+        if let hidden = UsageStats.firstHiddenDirName(in: projectDir) {
+            return hidden
+        }
+
+        return projectDir.split(separator: "-").last.map(String.init) ?? projectDir
+    }
+
+    // Detects the first `/.<name>/` boundary in an encoded project key
+    // (which appears as `--<name>-` because both delimiters collapse to
+    // `-`) and returns the hidden dir name without the leading dot.
+    private nonisolated static func firstHiddenDirName(in encoded: String) -> String? {
+        let parts = encoded.split(separator: "-", omittingEmptySubsequences: false).map(String.init)
+        for i in 1..<(parts.count - 1) where parts[i].isEmpty && !parts[i + 1].isEmpty {
+            return parts[i + 1]
+        }
+        return nil
+    }
+
+    // Untyped JSON read so the Decodable conformance does not need to
+    // cross the project's default-@MainActor isolation barrier.
+    private nonisolated static func loadProjectNames() -> [String: String] {
+        let url = FileManager.default
+            .homeDirectoryForCurrentUser
+            .appendingPathComponent(".claude/homunculus/projects.json")
+        guard
+            let data = try? Data(contentsOf: url),
+            let json = try? JSONSerialization.jsonObject(with: data),
+            let dict = json as? [String: Any]
+        else {
+            return [:]
+        }
+        var result: [String: String] = [:]
+        for (_, value) in dict {
+            guard
+                let entry = value as? [String: Any],
+                let name = entry["name"] as? String,
+                let root = entry["root"] as? String
+            else { continue }
+            result[encodeProjectDir(root)] = name
+        }
+        return result
+    }
+
+    // Mirrors Claude Code's encoding for project dir names under
+    // ~/.claude/projects/: replace both '/' and '.' with '-'.
+    private nonisolated static func encodeProjectDir(_ path: String) -> String {
+        path
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ".", with: "-")
     }
 
     func initialScan() async {
@@ -73,10 +156,21 @@ final class UsageStats {
 
     var projectCount: Int { projectMessageCounts.count }
 
-    var topProjects: [(projectDir: String, tokens: Int)] {
-        projectTokens
-            .sorted { $0.value > $1.value }
-            .prefix(5)
-            .map { (projectDir: $0.key, tokens: $0.value) }
+    // Aggregates project tokens by their pretty-name label (so e.g.
+    // every paperclip UUID workspace rolls into a single "paperclip"
+    // slice) and returns the top `n` plus an "Others" remainder.
+    func projectTokenSlices(topN n: Int) -> [(label: String, tokens: Int)] {
+        var byLabel: [String: Int] = [:]
+        for (dir, tokens) in projectTokens {
+            byLabel[prettyName(dir), default: 0] += tokens
+        }
+        let sorted = byLabel.sorted { $0.value > $1.value }
+        let head = Array(sorted.prefix(n))
+        let othersTotal = sorted.dropFirst(n).reduce(0) { $0 + $1.value }
+        var out = head.map { (label: $0.key, tokens: $0.value) }
+        if othersTotal > 0 {
+            out.append((label: "Others", tokens: othersTotal))
+        }
+        return out
     }
 }
